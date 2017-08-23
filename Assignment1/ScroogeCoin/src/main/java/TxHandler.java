@@ -1,7 +1,6 @@
 
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class TxHandler {
 
@@ -171,32 +170,8 @@ public class TxHandler {
 
                 // at this point at least transaction t will be valid
                 validTxsList.add(t);
-
-                validateSubsets(validTxsList, txsSubSet);
-
-//                // check if the current transaction has common objects of unspent outputs (UTXOs)
-//                // with any other transaction. In that case mark it as invalid and continue
-//                // to the next transaction
-//                for (Transaction subT : txsSubSet) {
-//                    boolean subsetValid = true;
-//
-//                    // for each UTXO related to the current transaction subset
-//                    // check if that same UTXO is already used by the outer transaction t
-//                    // if yes, do not add this subset to the set of valid txs
-//                    for (UTXO utxo : txUTXO.get(subT)) {
-//                        // if the UTXO list of the current transaction t contains
-//                        // any of the UTXOs of this sub transaction, do not add
-//                        // this sub transaction to the list of valid txs
-//                        if (txUTXO.get(t).contains(utxo)) {
-//                            subsetValid = false;
-//                            break;
-//                        }
-//                    }
-//
-//                    if (subsetValid) {
-//                        validTxsList.add(subT);
-//                    }
-//                }
+                // call method to determine a mutually valid set of transactions (validTxsList)
+                validateAndRemoveInvalidSubsets(validTxsList, txsSubSet);
             }
 
             validTxsLists.add(validTxsList);
@@ -223,16 +198,21 @@ public class TxHandler {
      * This method recursively traverses all subset transactions comparing with the newest member
      * of the validTxsList. If no more transactions exist in the txsSubSet, this method returns true
      */
-    private boolean validateSubsets(List<Transaction> validTxs, List<Transaction> testTxs) {
+    private boolean validateAndRemoveInvalidSubsets(List<Transaction> validTxs, List<Transaction> testTxs) {
 
         // all transactions are already placed in validTxs list, return valid
         if(testTxs.isEmpty()) {
             return true;
         }
 
+        // gets the most recently added valid transaction
         Transaction t = validTxs.get(validTxs.size()-1);
 
+        // retrieve a list of UTXOs for the list of inputs of transaction t
         List<UTXO> tUTXOs = getUTXOforInputList(t.getInputs());
+
+        // transaction marked as invalid, which will be removed in a later step
+        List<Transaction> txToRemove = new ArrayList<>();
 
         for (Transaction subT : testTxs) {
             List<UTXO> subTUTXOs = getUTXOforInputList(subT.getInputs());
@@ -245,11 +225,13 @@ public class TxHandler {
                 // any of the UTXOs of this sub transaction, remove
                 // this sub transaction from the list of test txs
                 if (tUTXOs.contains(utxo)) {
-                    testTxs.remove(subT);
+                    txToRemove.add(subT);
                     break;
                 }
             }
         }
+
+        testTxs.removeAll(txToRemove);
 
         if(testTxs.isEmpty()) {
             return true;
@@ -257,7 +239,7 @@ public class TxHandler {
 
         validTxs.add(testTxs.remove(0));
 
-        return validateSubsets(validTxs, testTxs);
+        return validateAndRemoveInvalidSubsets(validTxs, testTxs);
     }
 
 
